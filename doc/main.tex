@@ -1,0 +1,203 @@
+\documentclass[a4paper,12pt]{article}
+
+\usepackage[slovak]{babel}
+\usepackage[left=1.5cm,text={18cm, 25cm},top=2cm]{geometry}
+\usepackage[utf8]{inputenc}
+\usepackage{times}
+\usepackage{amsthm}
+\usepackage{amsmath,amsfonts,amssymb}
+\usepackage{graphicx}
+\usepackage{rotating}
+\usepackage{listings}
+\usepackage{xcolor}
+\usepackage{microtype}
+\usepackage{textcomp}
+\usepackage{caption}
+\usepackage{relsize}
+\usepackage{subfig}
+\usepackage{placeins}
+\usepackage{hyperref}
+
+\definecolor{codegreen}{rgb}{0,0.6,0}
+\definecolor{codegray}{rgb}{0.5,0.5,0.5}
+\definecolor{codepurple}{rgb}{0.58,0,0.82}
+\definecolor{backcolour}{rgb}{0.95,0.95,0.92}
+
+\lstdefinestyle{mystyle}{
+    backgroundcolor=\color{backcolour},   
+    commentstyle=\color{codegreen},
+    keywordstyle=\color{magenta},
+    numberstyle=\tiny\color{codegray},
+    stringstyle=\color{codepurple},
+    basicstyle=\ttfamily\footnotesize,
+    breakatwhitespace=false,         
+    breaklines=true,                 
+    captionpos=b,                    
+    keepspaces=true,                 
+    numbers=left,                    
+    numbersep=5pt,                  
+    showspaces=false,                
+    showstringspaces=false,
+    showtabs=false,                  
+    tabsize=2,
+    extendedchars=false,
+    escapeinside={\%*}{*)},
+    inputencoding=utf8
+}
+\lstset{style=mystyle}
+
+\author{Jakub Mĺkvy (xmlkvy00)\\Adam Múdry (xmudry01)}
+\date{\today}
+\title{\Large\bf Projekt -- IMS 2020/2021}
+
+\begin{document}
+\begin{titlepage}
+	\begin{center}
+	    \vspace*{+3cm}
+		\Huge
+		\textsc{Fakulta informačních technologií\\
+		\huge Vysoké učení technické v~Brně}\\
+		\vspace{\stretch{0.38}}    
+	    {\LARGE{Dokumentácia\\
+	    \vspace{4mm}
+	    \Huge\textbf{{ESP32: Zabezpečovací systém s detekcí pohybu}}\\
+		\vspace{4mm}
+		\LARGE{\textit{Mikroprocesorové a vestavěné systémy}}
+		}}
+		 
+		\vspace{\stretch{0.62}}
+	\end{center}
+	{\Large \today \hfill Adam Múdry (xmudry01)}
+	
+	\thispagestyle{empty}
+    \setcounter{page}{0}
+\end{titlepage}
+
+\newpage
+
+\tableofcontents
+
+\newpage
+\section{Úvod do problému}
+\subsection{Zadanie}
+
+Úlohou projektu bolo zostrojiť riešenie na tému \textit{Zabezpečovací systém s detekciou pohybu} s využitím vývojového kitu na báze \textbf{SoC} \textit{(system-on-chip)} \textbf{ESP32} od firmy Espressif, konkrétne fotobunku aktivovanú pohybom.
+
+\subsection{Hardvér}
+Na riešenie som mal možnosť použiť vývojové kity \textbf{ESP-EYE}, \textbf{ESP32-S2 Saola} a \textbf{ESP32-Buddy}. Pohybový senzor je \textbf{PIR Sensor} \textit{(passive infrared sensor)} \textbf{Parallax \#555-28027}.
+
+\subsection{Softvér}
+Pri výbere softvéru som mal voľnú ruku a rozhodoval som sa medzi knižnicou \textbf{Nesper}, \textbf{Arduino core for the ESP32} a \textbf{ESP-IDF}.
+\begin{itemize}
+  \item Knižnica Nesper je wrapper pre ESP-IDF a je napísaná v jazyku Nim, čo je staticky typovaný prekladaný programovací jazyk so syntaxom podobným Pythonu a rýchlosťou porovnateľnou s jazykom C.
+Výsledok jeho prekladu je v našom prípade zdrojový kód v jazyku C alebo v jazyku C++, ktorý je následne preložený zvoleným prekladačom. Toto ho robí vhodný pre programovanie aj na embedded platformách.
+\item  Arduino core for the ESP32 je knižnica pre známe Arduino IDE, ktoré mnohí využívajú pre svoje embedded projekty. Jazyk pre Arduino projekty je C++.
+\item  ESP-IDF je oficiálny framework od firmy Espressif písaný v jazyku C.
+\end{itemize}
+Na riešenie som si vybral ESP-IDF, pretože je to oficiálny framework s najlepšou podporou a najväčšou funkcionalitou. Nesper je v momente písania tejto dokumentácie stále \textit{work-in-progress} a mnohá funkcionalita chýba alebo je pokazená a riešenie projektu pomocou Arduino core
+by bolo v C-style jazyku tak isto ako pri ESP-IDF.
+
+\newpage
+\section{Popis riešenia}
+Pôvodne som plánoval vytvoriť svoje riešenie pomocou jedného modulu \textbf{ESP-EYE} (ESP32 dev-board so vstavanou kamerou), ktorý by slúžil zároveň ako \textbf{senzor}, \textbf{fotobunka} a \textbf{HTTP server}, 
+pomocou ktorého sa budú dať snímky zobraziť vo webovom prehliadači - avšak zistil som,
+že moje riešenie iba s jedným modulom nie je možné, pretože daný modul nemá rozhranie \textbf{GPIO} \textit{(general-purpose input/output)}, na ktoré by som mohol PIR senzor pripojiť.
+\\
+\\
+Preto som sa rozhodol na riešenie použiť 2 moduly ESP32:
+\begin{itemize}
+  \item \textbf{ESP-EYE}, ktorý slúži ako fotoaparát + HTTP server a
+  \item \textbf{ESP32-S2 Saola}, ktorý má rozhranie GPIO, na ktoré je pripojený samotný PIR senzor na detekciu pohybu.
+\end{itemize}
+\\
+Na týchto zariadeniach bežia 2 rôzne programy a komunikujú pomocou \textbf{MQTT} protokolu vhodného pre \textbf{IoT} zariadenia.
+
+\subsection{Využité prostriedky}
+Na riešenie projektu som použil už vyššie spomínaný hardvér:
+\begin{itemize}
+  \item \textbf{ESP-EYE} (ESP32)
+  \item \textbf{ESP32-S2 Saola}
+  \item \textbf{Parallax PIR Sensor} (\#555-28027)
+\end{itemize}
+\\
+Softvér je písaný v jazyku \textbf{C}, popričom som využil:
+\begin{itemize}
+  \item \textbf{\href{https://github.com/espressif/esp-idf}{\color{blue}ESP-IDF}} - oficiálny development framework pre ESP32 and ESP32-S série SoC zariadení
+  \item \textbf{\href{https://github.com/espressif/esp32-camera}{\color{blue}ESP32 Camera Driver}} - knižnica pre prácu s rôznymi obrazovými snímačmi
+  \item \textbf{\href{https://github.com/Lucas-Bruder/ESP32_LED_STRIP}{\color{blue}ESP32 Addressable LED Strip Library}} - knižnica pre prácu s RGB LED nachádzajúcou sa na ESP32-S2 Saola
+\end{itemize}
+Ďalší využitý softvér je \textbf{MQTT Broker} server bežiaci na PC, ktorý umožnuje komunikáciu medzi modulmi.
+
+\subsection{Detaily implementácie}
+\subsubsection{Senzor pohybu}
+PIR senzor vie pracovať na širšom rozpätí napätia, tj. od 3V do 6V. Ja som využil 5V a GND (ground) GPIO pin na ESP32. Out/data pin z PIR senzora je zapojený na GPIO pine 17.
+\\
+\\
+Pri štarte programu sa inicializuje NVS flash pamäť, network interface a základný event loop. Ďalej sa nastaví RGB LED a GPIO pin, na ktorom je zapojený PIR senzor.
+Následne sa vytvorí sa vytvorí interrupt handler pre funkciu, ktorá zaobstaráva obsluhu interruptu
+na nami určenom GPIO pine. Ako posledné sa modul pripojí na sieť a inicializuje MQTT funkcionalitu.
+\\
+\\
+Ak PIR senzor zaznamená pohyb, spustí sa interrupt a následne naša funkcia, ktorá vyšle MQTT správu pre modul fotobuky, aby vytvorila snímku. 
+
+\subsubsection{Fotobunka s HTTP serverom}
+Pri štarte programu sa inicializuje NVS flash pamäť, network interface a základný event loop. Ďalej sa nastaví GPIO pin pre LED a inicializuje sa
+kamerový systém modulu. Modul sa pripojí na sieť, inicializuje MQTT funkcionalitu a následne spustí HTTP server, ktorý servíruje JPEG snímky odfotené fotobunkou.
+\\
+\\
+Ak modul dostane MQTT správu od prvého modulu so senzorom pohybu, tak modul zahodí predošlý buffer s fotografiou a vytvorí novú, ktorú následne môžeme zobraziť 
+napr. vo webovom prehliadači, ak doň zadáme IP adresu daného modulu. Alternatívne vieme snímku získať napr. pomocou programu CURL a GET requestom na danú IP.
+
+\section{Spustenie}
+
+\subsection{Potrebný softvér}
+\begin{itemize}
+  \item \textbf{\href{https://github.com/espressif/esp-idf}{\color{blue}ESP-IDF}} v minimálnej verzii 4.2 a správne nastavené: \href{https://docs.espressif.com/projects/esp-idf/en/latest/esp32/get-started/}{\color{blue}návod}
+\end{itemize}
+
+\subsection{Postup}
+\begin{itemize}
+  \item V správne nastavenom termináli pre ESP-IDF sa dostaneme do zložky s programom, ktorý chceme postavať (\textbf{motion} pre pohybový senzor, \textbf{camera} pre fotobunku)
+  \item Použijeme príkaz \textbf{idf.py menuconfig}, kde nastavíme WiFi prihlasovacie údaje a adresu MQTT brokera
+  \item Použijeme príkaz \textbf{idf.py build}, ktorý spustí preklad a linkovanie a vytvorí binárny súbor
+  \item Použijeme príkaz \textbf{idf.py -p PORT flash}, ktorý zapíše binárny súbor do pamäte ESP32
+  \item Ak chceme vidieť debugovacie správy na štandardnom výstupe v termináli, použijeme príkaz \textbf{idf.py -p PORT monitor}
+  \item Zadáme IP adresu fotobunky do prehliadača a zobrazí sa nám posledná odfotená snímka
+  \item Nová snímka vznikne vtedy, ak spustíme PIR senzor na druhom module a ten vyšle MQTT príkaz pre fotobunku. Zobrazí sa po novom načítaní web stránky.
+\end{itemize}
+
+\newpage
+\section{Záver}
+
+\subsection{Nedostatky}
+Program pre pohybový senzor obsahuje bug, ktorý je zrejme v samotnom ESP-IDF. Ak sa odosiela MQTT správa mimo MQTT handlera, tak jej odoslanie trvá medzi instantným odoslaním až pár sekundovým spomalením.
+Pri monitorovaní programu pomocou \textbf{idf.py monitor} môžeme vidieť túto chybu ako opakované výpisy na štandardnom výstupe:
+\begin{lstlisting}
+...
+I (13540) phy: pll_cap_ext 10
+I (13550) phy: pll_cap_ext 10
+I (13560) phy: pll_cap_ext 10
+I (13560) phy: pll_cap_ext 10
+I (13570) phy: pll_cap_ext 10
+I (13570) phy: pll_cap_ext 10
+...
+I (15260) phy: pll_cap_ext 10
+I (15320) Motion sensor: MQTT_EVENT_PUBLISHED, msg_id=58815
+\end{lstlisting}
+
+\subsection{Zhodnotenie}
+Riešenie projektu hodnotím ako úspešné. Trochu som sa oddialil od pôvodného zadania, avšak mal som na to valídny dôvod. Podarilo sa mi spraviť všetko tak, ako som chcel a aj keď som narazil na chybu, je to chyba ktorú nemôžem vyriešiť a k tomu funkcionalitu projektu obmedzuje minimálne.
+\\
+\\
+Odkaz na video s demonštráciou (obhajoba): \href{https://nextcloud.fit.vutbr.cz/s/j4gPicrpMYzc3ek}{\color{blue}FIT Nextcloud}
+
+\newpage
+\section{Bibliografia}
+\bibliographystyle{czechiso}
+\bibliography{manual}
+\nocite{espidf}
+\nocite{espidfgithub}
+\nocite{espcam}
+\nocite{rgbled}
+
+\end{document}
